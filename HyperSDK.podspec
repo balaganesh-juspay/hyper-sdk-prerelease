@@ -1,7 +1,7 @@
 
 Pod::Spec.new do |s|
   s.name         = "HyperSDK"
-  s.version      = "2.2.1.8-rc-1"
+  s.version      = "0.1.8.0"
   s.summary      = "Hyper visualization and payment processing."
   s.description  = <<-DESC
                    Create payment experiences for user to improve coversion and success rate.
