@@ -1,7 +1,7 @@
 
 Pod::Spec.new do |s|
   s.name         = "HyperSDK"
-  s.version      = "0.0.2"
+  s.version      = "0.0.3"
   s.summary      = "Hyper visualization and payment processing."
   s.description  = <<-DESC
                    Create payment experiences for user to improve coversion and success rate.
@@ -12,9 +12,9 @@ Pod::Spec.new do |s|
   s.author       = { "Sachin Sharma" => "sachin.sharma@juspay.in" }
 
   s.platform     = :ios, "12.0"
-  s.resources = 'Fuse.rb'
+  s.resources    = 'Fuse.rb'
  
-  s.source       = { :git => "https://github.com/balaganesh-juspay/hyper-sdk-prerelease.git", :tag => 'v0.0.2' }
+  s.source       = { :git => "https://github.com/balaganesh-juspay/hyper-sdk-prerelease.git", :tag => 'v0.0.3' }
 
   s.dependency "JuspaySafeBrowser", "0.1.84"
   s.dependency 'Salvator', '1.0.6'

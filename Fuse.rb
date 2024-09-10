@@ -5,7 +5,6 @@ require 'json'
 
 $is_devtools_build = false
 is_xcodeproj_available = true
-
 begin
     require 'xcodeproj'
 rescue LoadError
@@ -316,7 +315,7 @@ if(! $is_devtools_build)
 end
 
 def delete_assets(asset_path)
-    if(! $is_devtools_build)
+    if(!$is_devtools_build)
         FileUtils.rm_rf(Dir[ asset_path + "/*.mp3" ])
         FileUtils.rm_rf(Dir[ asset_path + "/app-*.json" ])
         FileUtils.rm_rf(Dir[ asset_path + "/*.png" ])
@@ -332,7 +331,7 @@ def delete_assets(asset_path)
 end
 
 def extract_to_path(zip_path,destination_path, merchant_id)
-    puts "[HyperSDK] #{merchant_id} Extracting assets..."
+    puts "[HyperSDK] (#{merchant_id}) Extracting assets..."
     system("unzip", "-q", "-o", "-j", zip_path, "-d", get_bundled_path($hyper_sdk_iphone_framework_path , destination_path))
     if $is_xcframework
         system("unzip", "-q", "-o", "-j", zip_path, "-d", get_bundled_path($hyper_sdk_simulator_framework_path , destination_path))
@@ -497,7 +496,130 @@ if download_status.all?
             end
         end
     end
+end
 
+def show_add_plist_property_warning
+    puts "Please add the following properties manually in the App's plist file. Ignore if already added.".yellow
+    puts """
+        <key>CFBundleURLTypes</key>
+        <array>
+            <dict>
+                <key>CFBundleURLName</key>
+                <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+                <key>CFBundleURLSchemes</key>
+                <array>
+                    <string>amzn-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+                    <string>juspay-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+                    <string>$(PRODUCT_BUNDLE_IDENTIFIER).cred</string>
+                    <string>paytm-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+                </array>
+            </dict>
+        </array>
+
+        <key>LSApplicationQueriesSchemes</key>
+        <array>
+            <string>credpay</string>
+            <string>phonepe</string>
+            <string>paytmmp</string>
+            <string>tez</string>
+            <string>paytm</string>
+            <string>bhim</string>
+            <string>myairtel</string>
+            <string>slice-upi</string>
+            <string>ppe</string>
+            <string>amazonpay</string>
+            <string>devtools</string>
+            <string>cugext</string>
+        </array>
+    """
+end
+
+if is_xcodeproj_available
+    project_files = Dir[ __dir__ + "/../../*.xcodeproj" ]
+
+    if project_files.length > 0
+        project_path = project_files[0]
+        project_file_name = project_path.split('/').last
+        project_folder_name = project_file_name.split('.').first
+
+        project = Xcodeproj::Project.open(project_path)
+        target = project.targets[0]
+
+        info_plist_files = []
+
+        project.targets.each { |target|
+            if target.sdk == "iphoneos"
+                if pListTargets == [] || pListTargets.include?(target.name)
+                    debugBuildSettings = target.build_settings("Debug")
+                    releaseBuildSettings = target.build_settings("Release")
+
+                    if debugBuildSettings
+                        debugPlistPath = debugBuildSettings["INFOPLIST_FILE"]
+                        if debugPlistPath && !info_plist_files.include?(debugPlistPath)
+                            info_plist_files.push(debugPlistPath)
+                        end
+                    end
+
+                    if releaseBuildSettings
+                        releasePlistPath = releaseBuildSettings["INFOPLIST_FILE"]
+                        if releasePlistPath && !info_plist_files.include?(releasePlistPath)
+                            info_plist_files.push(releasePlistPath)
+                        end
+                    end
+                end
+            end
+        }
+
+        if info_plist_files.length > 0
+            puts "[HyperSDK] Adding the required URL Schemes & Queries Schemes in plist files..."
+            info_plist_files.each { |info_plist_file_path|
+                puts "[HyperSDK] Plist file path: " + info_plist_file_path
+                info_plist_file_path.slice! "$(SRCROOT)/"
+                info_plist_file_path.slice! "${SRCROOT}/"
+                if File.exist?(info_plist_file_path)
+                    info=Xcodeproj::Plist.read_from_path(info_plist_file_path)
+                    queriesSchemes = info["LSApplicationQueriesSchemes"] || []
+                    queriesSchemesToAdd = ["credpay", "phonepe", "paytmmp", "tez", "paytm", "bhim", "myairtel", "slice-upi", "ppe", "amazonpay", "cugext" , "devtools"]
+                    queriesSchemesToAdd.each { |item|
+                        if queriesSchemes.include?(item) == false
+                            queriesSchemes.push(item)
+                        end
+                    }
+                    info["LSApplicationQueriesSchemes"] = queriesSchemes
+
+                    urlSchemesToAdd = ["amzn-$(PRODUCT_BUNDLE_IDENTIFIER)", "juspay-$(PRODUCT_BUNDLE_IDENTIFIER)", "$(PRODUCT_BUNDLE_IDENTIFIER).cred", "paytm-$(PRODUCT_BUNDLE_IDENTIFIER)"]
+                    urlTypes = info["CFBundleURLTypes"] || []
+                    if urlTypes.empty?
+                        urlTypes.push({"CFBundleURLName" => "$(PRODUCT_BUNDLE_IDENTIFIER)", "CFBundleURLSchemes" => urlSchemesToAdd})
+                    else
+                        firstItem = urlTypes[0]
+                        if firstItem["CFBundleURLName"] != "$(PRODUCT_BUNDLE_IDENTIFIER)"
+                            urlTypes.insert(0, {"CFBundleURLName" => "$(PRODUCT_BUNDLE_IDENTIFIER)", "CFBundleURLSchemes" => urlSchemesToAdd})
+                        else
+                            urlSchemes = firstItem["CFBundleURLSchemes"] || []
+                            urlSchemesToAdd.each { |item|
+                                if urlSchemes.include?(item) == false
+                                    urlSchemes.push(item)
+                                end
+                            }
+                            firstItem["CFBundleURLSchemes"] = urlSchemes
+                            urlTypes[0] = firstItem
+                        end
+                    end
+                    info["CFBundleURLTypes"] = urlTypes
+                    Xcodeproj::Plist.write_to_path(info, info_plist_file_path)
+                else
+                    puts ("[HyperSDK] Warning - Couldn't find plist file at path " + info_plist_file_path + ". Please add the required URL Schemes & Queries Schemes manually in the plist file. Ignore if already added.").yellow
+                end
+            }
+        else
+            puts "[HyperSDK] Warning - Couldn't find plist files.".yellow
+            show_add_plist_property_warning()
+        end
+    end
+else
+    puts "[HyperSDK] Warning - Couldn't add the required properties in the plist file since `xcodeproj` gem library is missing.\n\nPlease install it by running `gem install xcodeproj` and then run `pod install`.\n(or)".yellow
+    show_add_plist_property_warning()
 end
 
 puts "[HyperSDK] Done.".green
